@@ -1,14 +1,14 @@
 import { StyleSheet, Text, View } from 'react-native'
 import React from 'react'
 import SafeLayout from '@/safeLayout/SafeLayout'
-import BibleVersionScreen from '@/screens/Bible/Bible'
+import BibleBookSelection from '@/screens/Bible/Book-Selection'
 
 const index = () => {
   return (
     <SafeLayout>
 
     <View style={{ flex: 1 }}>
-<BibleVersionScreen />
+<BibleBookSelection />
     </View>
     </SafeLayout>
   )
