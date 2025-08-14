@@ -165,7 +165,7 @@ const BibleBookSelection: React.FC = () => {
 
   const handleBookSelect = (book: BibleBook) => {
     router.push({
-      pathname: '/bible-chapter-selection',
+      pathname: '/read/chapter-selection',
       params: { 
         version,
         bookId: book.id,
