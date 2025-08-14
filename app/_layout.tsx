@@ -1,4 +1,5 @@
 
+import { QueryProvider } from '@/lib/QueryProvider';
 import { useFonts } from 'expo-font';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -21,6 +22,9 @@ export default function RootLayout() {
 
   return (
     <>
+        <QueryProvider>
+
+   
       <Stack>
         <Stack.Screen name="onboarding/Onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -33,6 +37,7 @@ export default function RootLayout() {
   
       </Stack>
       <StatusBar style="auto" />
+      </QueryProvider>
     </>
   );
 }
