@@ -24,6 +24,7 @@ export default function RootLayout() {
       <Stack>
         <Stack.Screen name="onboarding/Onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="search/Index" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
 
   
