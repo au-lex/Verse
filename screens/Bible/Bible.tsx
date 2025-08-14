@@ -353,7 +353,7 @@ const BibleVersionScreen: React.FC = () => {
             styles.continueButton,
             !selectedVersion && styles.disabledButton
           ]}
-          onPress={() => router.push('/(read)/book-selection')}
+          onPress={() => router.push('/read/book-selection')}
           disabled={!selectedVersion}
         >
           <Text style={[

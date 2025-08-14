@@ -51,7 +51,7 @@ const BibleHomeScreen: React.FC = () => {
       icon: "book-outline", 
       label: "Read", 
       color: "#3B82F6",
-      onPress: () => router.push('/bible-versions')
+      onPress: () => router.push('/(tabs)/bible')
     },
     { 
       icon: "search-outline", 
@@ -59,18 +59,7 @@ const BibleHomeScreen: React.FC = () => {
       color: "#10B981",
       onPress: () => router.push('/search/Index')
     },
-    { 
-      icon: "bookmark-outline", 
-      label: "Bookmarks", 
-      color: "#8B5CF6",
-      onPress: () => router.push('/bookmarks')
-    },
-    { 
-      icon: "download-outline", 
-      label: "Offline", 
-      color: "#F59E0B",
-      onPress: () => router.push('/offline')
-    }
+
   ];
 
   const QuickActionCard: React.FC<{ action: QuickAction }> = ({ action }) => (
