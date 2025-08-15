@@ -1,50 +1,78 @@
-# Welcome to your Expo app 👋
+# Toraaah Bible Reading App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A React Native Bible reading app with offline support and search functionality.
 
-## Get started
+## 📱 Quick Demo
 
-1. Install dependencies
+**OPEN THE URL WITH EXPO GO**: [URL](https://expo.dev/preview/update?message=full+app+done&updateRuntimeVersion=1.0.0&createdAt=2025-08-15T02%3A54%3A23.282Z&slug=exp&projectId=76b8965a-5547-47d5-8b8d-f156f20d9a28&group=b7649382-322c-4ead-a16f-892a504cc6cd)
+**Download APK**: [Download Android APK](./builds/app-release.apk)
 
-   ```bash
-   npm install
-   ```
+**Expo Development Build**: Use Expo Go app and scan QR code when running `npx expo start`
 
-2. Start the app
+## 🚀 Setup Instructions
 
-   ```bash
-   npx expo start
-   ```
+### Prerequisites    
+- Node.js (v16+)
+- Expo CLI (`npm install -g expo-cli`)
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
+### Installation
 ```bash
-npm run reset-project
+git clone git@github.com:au-lex/Verse.git
+cd cd verse
+npm install
+
+# Start development server
+npx expo start
+
+# Or build APK
+expo build:android
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## 🏗️ Technical Approach
 
-## Learn more
+### Architecture
+- **Screens**: Version selector → Books list → Chapter reading
+- **Navigation**: React Navigation for smooth transitions
+- **Offline**: AsyncStorage for chapter caching
+- **State Management**: TanStack Query for API calls and caching
 
-To learn more about developing your project with Expo, look at the following resources:
+### Key Features
+- Browse Bible versions and books
+- Read chapters with formatted verses
+- Offline reading (auto-cached chapters)
+- Search within selected version
+- Loading states and error handling
+- Smooth animations
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## 📚 Third-Party Libraries
 
-## Join the community
+**@tanstack/react-query**
+- **Why**: Excellent for data fetching with built-in caching and offline support
+- **Benefits**: Automatic caching, loading states, background updates, perfect for the offline requirement
 
-Join our community of developers creating universal apps.
+**@react-navigation/native**
+- **Why**: Standard navigation library with smooth transitions
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+**@react-native-async-storage/async-storage**
+- **Why**: Reliable local storage for offline chapter caching
+
+## 🚧 Trade-offs & Limitations
+
+
+- Simple cache strategy (no size management)
+- No reading progress sync across devices
+
+## 🧪 Testing
+```bash
+npm test
+```
+
+## 📱 App Flow
+1. Select Bible version
+2. Choose book from list
+3. Select chapter to read verses
+4. Chapters auto-cache for offline reading
+5. Search within version using search bar
+
+---
+Built for Toraaah React Native Developer Assessement by Aulex
