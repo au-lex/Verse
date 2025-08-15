@@ -5,7 +5,7 @@ A React Native Bible reading app with offline support and search functionality.
 ## 📱 Quick Demo
 
 **OPEN THE URL WITH EXPO GO**: [URL](https://expo.dev/preview/update?message=full+app+done&updateRuntimeVersion=1.0.0&createdAt=2025-08-15T02%3A54%3A23.282Z&slug=exp&projectId=76b8965a-5547-47d5-8b8d-f156f20d9a28&group=b7649382-322c-4ead-a16f-892a504cc6cd)
-**Download APK**: [Download Android APK](./builds/app-release.apk)
+**Download APK**: [Download Android APK](https://expo.dev/accounts/aulex/projects/verse/builds/74f7ea14-b954-4ed2-ab6e-475adc341077)
 
 **Expo Development Build**: Use Expo Go app and scan QR code when running `npx expo start`
 
@@ -72,7 +72,7 @@ npm test
 2. Choose book from list
 3. Select chapter to read verses
 4. Chapters auto-cache for offline reading
-5. Search within version using search bar
+5. Search with keyword etc
 
 ---
 Built for Toraaah React Native Developer Assessement by Aulex
