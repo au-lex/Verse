@@ -2,6 +2,7 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform, Image } from 'react-native';
 
+
 export default function TabLayout() {
   return (
     <Tabs
@@ -17,7 +18,7 @@ export default function TabLayout() {
         name="home"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, focused, size = 28 }) => (
+          tabBarIcon: ({ color="#2E7D32", focused, size = 28 }) => (
             <Image
               source={{ uri: 'https://res.cloudinary.com/dmhvsyzch/image/upload/v1755142158/home_dtx1ks.png' }}
               style={{

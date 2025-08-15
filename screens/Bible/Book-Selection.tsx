@@ -58,7 +58,7 @@ const BibleBookSelection: React.FC = () => {
 
   // Helper function to categorize books by testament
   const categorizeBooks = (books: Book[]) => {
-    // Old Testament book IDs (typically follow standard ordering)
+ 
     const oldTestamentIds = [
       'GEN', 'EXO', 'LEV', 'NUM', 'DEU', // Torah
       'JOS', 'JDG', 'RUT', '1SA', '2SA', '1KI', '2KI', '1CH', '2CH', 'EZR', 'NEH', 'EST', // Historical
@@ -224,9 +224,7 @@ const BibleBookSelection: React.FC = () => {
         <Text style={styles.bookName}>{book.name}</Text>
         <Text style={styles.bookAbbreviation}>{book.abbreviation}</Text>
       </View>
-      <Text style={styles.bookChapters}>
-        {book.chapters?.length || 0} {(book.chapters?.length || 0) === 1 ? 'Chapter' : 'Chapters'}
-      </Text>
+
       <Ionicons name="chevron-forward" size={20} color="#9CA3AF" style={styles.bookArrow} />
     </TouchableOpacity>
   );
@@ -277,7 +275,7 @@ const BibleBookSelection: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+     
       
       {/* Header */}
       <View style={styles.header}>
@@ -287,30 +285,12 @@ const BibleBookSelection: React.FC = () => {
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Select Book</Text>
           <Text style={styles.headerVersion}>{version}</Text>
+
         </View>
-        <TouchableOpacity onPress={() => router.push('/search')}>
-          <Ionicons name="search-outline" size={24} color="#111827" />
-        </TouchableOpacity>
+  
       </View>
 
-      {/* Search */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchInputContainer}>
-          <Ionicons name="search-outline" size={20} color="#9CA3AF" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search books..."
-            placeholderTextColor="#9CA3AF"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color="#9CA3AF" />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
+ 
 
       {/* Testament Tabs */}
       <View style={styles.testamentTabs}>
@@ -345,9 +325,7 @@ const BibleBookSelection: React.FC = () => {
             <Text style={styles.noResultsSubtitle}>Try adjusting your search query</Text>
           </View>
         )}
-        
-        {/* Bottom spacing */}
-        <View style={{ height: 100 }} />
+ 
       </ScrollView>
     </SafeAreaView>
   );

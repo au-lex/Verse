@@ -167,7 +167,7 @@ const BibleVerseSelection: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+   
       
       {/* Header */}
       <View style={styles.header}>
@@ -178,29 +178,10 @@ const BibleVerseSelection: React.FC = () => {
           <Text style={styles.headerTitle}>Select Verse</Text>
           <Text style={styles.headerSubtitle}>{bookName} {chapterNumber} - {version}</Text>
         </View>
-        <TouchableOpacity onPress={() => router.push('/search')}>
-          <Ionicons name="search-outline" size={24} color="#111827" />
-        </TouchableOpacity>
+ 
       </View>
 
-      {/* Search */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchInputContainer}>
-          <Ionicons name="search-outline" size={20} color="#9CA3AF" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search verses..."
-            placeholderTextColor="#9CA3AF"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color="#9CA3AF" />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
+
 
       {/* Action Bar */}
       <View style={styles.actionBar}>
@@ -251,17 +232,8 @@ const BibleVerseSelection: React.FC = () => {
             </View>
           </View>
         )}
-        
-        {filteredVerses.length === 0 && !isLoading && (
-          <View style={styles.noResultsContainer}>
-            <Ionicons name="book-outline" size={48} color="#9CA3AF" />
-            <Text style={styles.noResultsTitle}>No verses found</Text>
-            <Text style={styles.noResultsSubtitle}>Try adjusting your search query</Text>
-          </View>
-        )}
-        
-        {/* Bottom spacing */}
-        <View style={{ height: 100 }} />
+
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -338,28 +310,8 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 2,
   },
-  searchContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  searchInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    fontFamily: 'Nunito-Regular',
-    color: '#111827',
-  },
+
+
   actionBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -404,23 +356,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   verseButton: {
-    width: (width - 80) / 6,
+    width: (width - 80) / 5,
     aspectRatio: 1,
     backgroundColor: '#FFFFFF',
     borderWidth: 2,
     borderColor: '#E5E7EB',
-    borderRadius: 8,
+    borderRadius: 58,
+    height: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+
+    margin: 2,
   },
   verseButtonText: {
     fontSize: 14,

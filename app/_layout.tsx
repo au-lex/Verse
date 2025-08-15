@@ -30,6 +30,10 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="search/Index" options={{ headerShown: false }} />
         <Stack.Screen name="read/chapter-selection" options={{ headerShown: false }} />
+        <Stack.Screen name="read/bible-reader" options={{ headerShown: false }} />
+        <Stack.Screen name="read/book-selection" options={{ headerShown: false }} />
+        <Stack.Screen name ="read/verse-selection" options={{ headerShown: false }} />
+
 
 
         <Stack.Screen name="+not-found" />

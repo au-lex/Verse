@@ -111,10 +111,8 @@ const BibleHomeScreen: React.FC = () => {
             <Text style={styles.headerSubtitle}>Good morning! Ready to read?</Text>
           </View>
           <View style={styles.headerRight}>
-          <TouchableOpacity onPress={() => router.push('/settings')}>
-              <Ionicons name="moon" size={24} color="#6B7280" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push('/settings')}>
+      
+            <TouchableOpacity >
               <Ionicons name="notifications" size={24} color="#6B7280" />
             </TouchableOpacity>
           </View>
@@ -142,35 +140,7 @@ const BibleHomeScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* Continue Reading */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Continue Reading</Text>
-            <TouchableOpacity onPress={() => router.push('/reading-history')}>
-              <Text style={styles.seeAllText}>See all</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <TouchableOpacity 
-            style={styles.continueReadingCard}
-            onPress={() => router.push('/bible/genesis/1')}
-          >
-            <View style={styles.continueReadingContent}>
-              <View>
-                <Text style={styles.continueReadingTitle}>Genesis 1</Text>
-                <Text style={styles.continueReadingSubtitle}>Last read: 2 hours ago</Text>
-              </View>
-              <View style={styles.continueReadingRight}>
-                <View style={styles.progressDot} />
-                <Text style={styles.progressText}>85% complete</Text>
-                <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-              </View>
-            </View>
-            <View style={styles.progressBarContainer}>
-              <View style={[styles.progressBar, { width: '85%' }]} />
-            </View>
-          </TouchableOpacity>
-        </View>
+
 
         {/* Recent Reading */}
         <View style={styles.section}>
@@ -289,11 +259,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 16,
   },
-  seeAllText: {
-    fontSize: 14,
-    fontFamily: 'Nunito-SemiBold',
-    color: '#3B82F6',
-  },
+
   quickActionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -306,6 +272,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     width: (width - 48) / 2,
 
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   quickActionIcon: {
     width: 48,
@@ -320,58 +289,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-SemiBold',
     color: '#111827',
   },
-  continueReadingCard: {
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 16,
-    padding: 16,
-    borderRadius: 16,
 
-  },
-  continueReadingContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  continueReadingTitle: {
-    fontSize: 16,
-    fontFamily: 'Nunito-SemiBold',
-    color: '#111827',
-  },
-  continueReadingSubtitle: {
-    fontSize: 14,
-    fontFamily: 'Nunito-Regular',
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  continueReadingRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  progressDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10B981',
-    marginRight: 8,
-  },
-  progressText: {
-    fontSize: 12,
-    fontFamily: 'Nunito-Regular',
-    color: '#6B7280',
-    marginRight: 8,
-  },
-  progressBarContainer: {
-    height: 8,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: '#10B981',
-    borderRadius: 4,
-  },
+
+ 
   recentReadingContainer: {
     paddingHorizontal: 16,
     gap: 12,
