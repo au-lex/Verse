@@ -292,7 +292,7 @@ export function useGetBibles() {
 
       return response.json();
     },
-    staleTime: 24 * 60 * 60 * 1000, // 24 hours (bibles don't change often)
+    staleTime: 24 * 60 * 60 * 1000,
     cacheTime: 7 * 24 * 60 * 60 * 1000, // 7 days
   });
 }
@@ -383,7 +383,7 @@ export function useGetChapter(bibleId: string, chapterId: string) {
       return chapterData;
     },
     enabled: !!bibleId && !!chapterId,
-    staleTime: 60 * 60 * 1000, // 1 hour (chapter content rarely changes)
+    staleTime: 60 * 60 * 1000, 
     cacheTime: 24 * 60 * 60 * 1000, // 24 hours
     retry: (failureCount, error) => {
       // Don't retry if we're offline and have no cached data
@@ -496,7 +496,7 @@ export function useGetVerse(bibleId: string, verseId: string) {
       return response.json();
     },
     enabled: !!bibleId && !!verseId,
-    staleTime: 60 * 60 * 1000, // 1 hour
+    staleTime: 60 * 60 * 1000, 
     cacheTime: 24 * 60 * 60 * 1000, // 24 hours
   });
 }
