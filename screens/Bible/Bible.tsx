@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Dimensions,
   Alert,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -47,10 +48,231 @@ interface Bible {
 
 const ITEMS_PER_PAGE = 10;
 
+
+const AnimatedVersionCard: React.FC<{ 
+  bible: Bible; 
+  selectedVersion: string; 
+  onSelect: (id: string) => void;
+  index: number;
+}> = ({ bible, selectedVersion, onSelect, index }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
+  const selectionAnim = useRef(new Animated.Value(0)).current;
+
+  const isSelected = selectedVersion === bible.id;
+
+  useEffect(() => {
+    // Staggered entrance animation
+    const delay = index * 100;
+    
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        delay,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        delay,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 600,
+        delay,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim, scaleAnim, index]);
+
+  useEffect(() => {
+    // Selection animation
+    Animated.spring(selectionAnim, {
+      toValue: isSelected ? 1 : 0,
+      tension: 100,
+      friction: 8,
+      useNativeDriver: true,
+    }).start();
+  }, [isSelected, selectionAnim]);
+
+  const handlePress = () => {
+    // Add haptic feedback animation
+    Animated.sequence([
+      Animated.timing(scaleAnim, {
+        toValue: 0.98,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    onSelect(bible.id);
+  };
+
+  const cardScale = Animated.add(
+    scaleAnim,
+    Animated.multiply(selectionAnim, 0.02)
+  );
+
+  const borderOpacity = Animated.multiply(selectionAnim, 1);
+  const backgroundOpacity = Animated.multiply(selectionAnim, 0.1);
+
+  return (
+    <Animated.View
+      style={[
+        {
+          opacity: fadeAnim,
+          transform: [
+            { translateY: slideAnim },
+            { scale: cardScale }
+          ],
+        }
+      ]}
+    >
+      <TouchableOpacity
+        style={styles.versionCard}
+        onPress={handlePress}
+        activeOpacity={0.9}
+      >
+        <Animated.View
+          style={[
+            styles.selectionBorder,
+            {
+              opacity: borderOpacity,
+            }
+          ]}
+        />
+        <Animated.View
+          style={[
+            styles.selectionBackground,
+            {
+              opacity: backgroundOpacity,
+            }
+          ]}
+        />
+        
+        <View style={styles.versionHeader}>
+          <View style={styles.versionInfo}>
+            <View style={styles.versionTitleRow}>
+              <Text style={styles.versionAbbreviation}>{bible.abbreviation}</Text>
+              <View style={styles.languageBadge}>
+                <Text style={styles.languageText}>{bible.language.name}</Text>
+              </View>
+            </View>
+            <Text style={styles.versionName}>{bible.name}</Text>
+            <Text style={styles.versionDescription}>{bible.description}</Text>
+          </View>
+          
+          <View style={styles.versionActions}>
+            <Animated.View
+              style={[
+                styles.selectedIndicator,
+                {
+                  opacity: selectionAnim,
+                  transform: [
+                    {
+                      scale: Animated.add(0.5, Animated.multiply(selectionAnim, 0.5))
+                    }
+                  ]
+                }
+              ]}
+            >
+              <Ionicons name="checkmark-circle" size={24} color="#3B82F6" />
+            </Animated.View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
+// Animated Search Bar Component
+const AnimatedSearchBar: React.FC<{
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+}> = ({ searchQuery, onSearchChange }) => {
+  const searchAnim = useRef(new Animated.Value(0)).current;
+  const clearAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(searchAnim, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
+  }, [searchAnim]);
+
+  useEffect(() => {
+    Animated.timing(clearAnim, {
+      toValue: searchQuery.length > 0 ? 1 : 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [searchQuery, clearAnim]);
+
+  return (
+    <Animated.View 
+      style={[
+        styles.searchContainer,
+        {
+          opacity: searchAnim,
+          transform: [
+            {
+              translateY: Animated.multiply(
+                Animated.subtract(1, searchAnim),
+                -20
+              )
+            }
+          ]
+        }
+      ]}
+    >
+      <View style={styles.searchInputContainer}>
+        <Ionicons name="search-outline" size={20} color="#9CA3AF" />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search versions..."
+          placeholderTextColor="#9CA3AF"
+          value={searchQuery}
+          onChangeText={onSearchChange}
+        />
+        <Animated.View
+          style={[
+            {
+              opacity: clearAnim,
+              transform: [
+                {
+                  scale: clearAnim
+                }
+              ]
+            }
+          ]}
+        >
+          <TouchableOpacity onPress={() => onSearchChange('')}>
+            <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
+    </Animated.View>
+  );
+};
+
 const BibleVersionScreen: React.FC = () => {
   const [selectedVersion, setSelectedVersion] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  
+  // Animation refs
+  const headerAnim = useRef(new Animated.Value(0)).current;
+  const buttonAnim = useRef(new Animated.Value(0)).current;
+  const paginationAnim = useRef(new Animated.Value(0)).current;
 
   // Fetch bibles from API
   const { data: biblesResponse, isLoading, error } = useGetBibles();
@@ -68,7 +290,6 @@ const BibleVersionScreen: React.FC = () => {
       versions = versions.filter(bible => 
         bible.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         bible.abbreviation.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        // bible.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
         bible.language.name.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
@@ -86,6 +307,39 @@ const BibleVersionScreen: React.FC = () => {
       hasPreviousPage: currentPage > 1
     };
   }, [biblesResponse?.data, searchQuery, currentPage]);
+
+  // Initialize animations when data loads
+  useEffect(() => {
+    if (!isLoading && !error) {
+      Animated.stagger(100, [
+        Animated.timing(headerAnim, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+        Animated.timing(buttonAnim, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+        Animated.timing(paginationAnim, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [isLoading, error, headerAnim, buttonAnim, paginationAnim]);
+
+  // Animate button state changes
+  useEffect(() => {
+    Animated.spring(buttonAnim, {
+      toValue: selectedVersion ? 1.05 : 1,
+      tension: 100,
+      friction: 8,
+      useNativeDriver: true,
+    }).start();
+  }, [selectedVersion, buttonAnim]);
 
   // Reset pagination when search changes
   useEffect(() => {
@@ -125,38 +379,6 @@ const BibleVersionScreen: React.FC = () => {
     }
   };
 
-  const VersionCard: React.FC<{ bible: Bible }> = ({ bible }) => (
-    <TouchableOpacity
-      style={[
-        styles.versionCard,
-        selectedVersion === bible.id && styles.selectedVersionCard
-      ]}
-      onPress={() => handleVersionSelect(bible.id)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.versionHeader}>
-        <View style={styles.versionInfo}>
-          <View style={styles.versionTitleRow}>
-            <Text style={styles.versionAbbreviation}>{bible.abbreviation}</Text>
-            <View style={styles.languageBadge}>
-              <Text style={styles.languageText}>{bible.language.name}</Text>
-            </View>
-          </View>
-          <Text style={styles.versionName}>{bible.name}</Text>
-          <Text style={styles.versionDescription}>{bible.description}</Text>
-        </View>
-        
-        <View style={styles.versionActions}>
-          {selectedVersion === bible.id && (
-            <View style={styles.selectedIndicator}>
-              <Ionicons name="checkmark-circle" size={24} color="#3B82F6" />
-            </View>
-          )}
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -186,8 +408,23 @@ const BibleVersionScreen: React.FC = () => {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       
-      {/* Header */}
-      <View style={styles.header}>
+      {/* Animated Header */}
+      <Animated.View 
+        style={[
+          styles.header,
+          {
+            opacity: headerAnim,
+            transform: [
+              {
+                translateY: Animated.multiply(
+                  Animated.subtract(1, headerAnim),
+                  -30
+                )
+              }
+            ]
+          }
+        ]}
+      >
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color="#111827" />
         </TouchableOpacity>
@@ -196,31 +433,24 @@ const BibleVersionScreen: React.FC = () => {
           <Text style={styles.headerSubtitle}>Select your preferred translation</Text>
         </View>
         <View style={{ width: 24 }} />
-      </View>
+      </Animated.View>
 
-      {/* Search */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchInputContainer}>
-          <Ionicons name="search-outline" size={20} color="#9CA3AF" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search versions..."
-            placeholderTextColor="#9CA3AF"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color="#9CA3AF" />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
+      {/* Animated Search */}
+      <AnimatedSearchBar 
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+      />
 
       {/* Versions List */}
       <ScrollView style={styles.versionsContainer} showsVerticalScrollIndicator={false}>
-        {filteredVersions.map((bible) => (
-          <VersionCard key={bible.id} bible={bible} />
+        {filteredVersions.map((bible, index) => (
+          <AnimatedVersionCard
+            key={bible.id}
+            bible={bible}
+            selectedVersion={selectedVersion}
+            onSelect={handleVersionSelect}
+            index={index}
+          />
         ))}
         
         {filteredVersions.length === 0 && !isLoading && (
@@ -232,9 +462,24 @@ const BibleVersionScreen: React.FC = () => {
         )}
       </ScrollView>
 
-      {/* Pagination */}
+      {/* Animated Pagination */}
       {totalPages > 1 && (
-        <View style={styles.paginationContainer}>
+        <Animated.View 
+          style={[
+            styles.paginationContainer,
+            {
+              opacity: paginationAnim,
+              transform: [
+                {
+                  translateY: Animated.multiply(
+                    Animated.subtract(1, paginationAnim),
+                    30
+                  )
+                }
+              ]
+            }
+          ]}
+        >
           <TouchableOpacity
             style={[styles.pageButton, !hasPreviousPage && styles.disabledPageButton]}
             onPress={handlePreviousPage}
@@ -276,11 +521,28 @@ const BibleVersionScreen: React.FC = () => {
               color={hasNextPage ? "#3B82F6" : "#9CA3AF"} 
             />
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       )}
 
-      {/* Bottom Action */}
-      <View style={styles.bottomContainer}>
+      {/* Animated Bottom Action */}
+      <Animated.View 
+        style={[
+          styles.bottomContainer,
+          {
+            transform: [
+              {
+                scale: buttonAnim
+              },
+              {
+                translateY: Animated.multiply(
+                  Animated.subtract(1, buttonAnim),
+                  50
+                )
+              }
+            ]
+          }
+        ]}
+      >
         <TouchableOpacity
           style={[
             styles.continueButton,
@@ -301,7 +563,8 @@ const BibleVersionScreen: React.FC = () => {
             color={selectedVersion ? "#FFFFFF" : "#9CA3AF"} 
           />
         </TouchableOpacity>
-      </View>
+
+      </Animated.View>
     </SafeAreaView>
   );
 };
@@ -378,7 +641,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 6,
     gap: 12,
   },
   searchInput: {
@@ -396,25 +659,35 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    position: 'relative',
+    overflow: 'hidden',
+
   },
-  selectedVersionCard: {
+  selectionBorder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 16,
+    borderWidth: 2,
     borderColor: '#3B82F6',
-    backgroundColor: '#F8FAFF',
+  },
+  selectionBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 16,
+    backgroundColor: '#3B82F6',
   },
   versionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    position: 'relative',
+    zIndex: 1,
   },
   versionInfo: {
     flex: 1,
@@ -459,7 +732,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   selectedIndicator: {
-    // Just the icon, positioned by parent
+    // Animated positioning handled by parent
   },
   paginationContainer: {
     flexDirection: 'row',

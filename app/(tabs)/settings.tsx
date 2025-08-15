@@ -357,7 +357,7 @@ const SettingsPage: React.FC = () => {
         ))}
         
         {/* Bottom spacing */}
-        <View style={{ height: 100 }} />
+        <View style={{ height: 15 }} />
       </ScrollView>
     </SafeLayout>
   );

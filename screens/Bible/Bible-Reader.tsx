@@ -337,7 +337,7 @@ const BibleReader: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+     
       
       {/* Header */}
       <View style={styles.header}>
@@ -394,7 +394,7 @@ const BibleReader: React.FC = () => {
         </View>
         
         <TouchableOpacity onPress={() => setShowSettings(!showSettings)}>
-          <Ionicons name="settings-outline" size={24} color="#111827" />
+      <Text style={{ color: '#3B82F6', fontSize: 26 , fontFamily:"Nunito-Bold"}}>A+</Text>
         </TouchableOpacity>
       </View>
 
@@ -439,19 +439,10 @@ const BibleReader: React.FC = () => {
               </View>
             )}
           </View>
-          
-          {/* Copyright notice */}
-          {parsedChapterData?.copyright && (
-            <View style={styles.copyrightContainer}>
-              <Text style={styles.copyrightText}>
-                {parsedChapterData.copyright.replace(/<[^>]*>/g, '')}
-              </Text>
-            </View>
-          )}
+ 
         </View>
         
-        {/* Bottom spacing */}
-        <View style={{ height: 100 }} />
+ 
       </ScrollView>
     </SafeAreaView>
   );

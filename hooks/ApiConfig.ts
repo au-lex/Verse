@@ -4,6 +4,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const API_BASE_URL = 'https://api.scripture.api.bible/v1';
 const API_KEY = 'b809a3adcefd1e56002148d07435d7b2'; 
 
+// Storage keys
+const STORAGE_KEYS = {
+  CHAPTER: (bibleId: string, chapterId: string) => `chapter_${bibleId}_${chapterId}`,
+  CHAPTERS_LIST: (bibleId: string, bookId: string) => `chapters_${bibleId}_${bookId}`,
+  OFFLINE_CHAPTERS: 'offline_chapters_index',
+};
+
 // Types - Bible API structure
 interface Bible {
   id: string;
@@ -108,11 +115,166 @@ interface SearchResponse {
   data: SearchResult;
 }
 
+interface CachedChapter {
+  data: ChapterResponse;
+  cachedAt: number;
+  bibleId: string;
+  chapterId: string;
+  reference: string;
+}
+
 // Helper function to get headers
 const getHeaders = () => ({
   'api-key': API_KEY,
   'Content-Type': 'application/json',
 });
+
+// Helper function to check network connectivity
+const isOnline = async (): Promise<boolean> => {
+  try {
+    const response = await fetch('https://www.google.com', {
+      method: 'HEAD',
+      timeout: 5000,
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+};
+
+// Storage helpers
+const saveChapterToStorage = async (
+  bibleId: string, 
+  chapterId: string, 
+  chapterData: ChapterResponse
+): Promise<void> => {
+  try {
+    const cachedChapter: CachedChapter = {
+      data: chapterData,
+      cachedAt: Date.now(),
+      bibleId,
+      chapterId,
+      reference: chapterData.data.reference,
+    };
+
+    // Save the chapter
+    const storageKey = STORAGE_KEYS.CHAPTER(bibleId, chapterId);
+    await AsyncStorage.setItem(storageKey, JSON.stringify(cachedChapter));
+
+    // Update the offline chapters index
+    await updateOfflineChaptersIndex(bibleId, chapterId, chapterData.data.reference);
+    
+    console.log(`Chapter ${chapterData.data.reference} saved offline`);
+  } catch (error) {
+    console.error('Error saving chapter to storage:', error);
+  }
+};
+
+const getChapterFromStorage = async (
+  bibleId: string, 
+  chapterId: string
+): Promise<ChapterResponse | null> => {
+  try {
+    const storageKey = STORAGE_KEYS.CHAPTER(bibleId, chapterId);
+    const cachedData = await AsyncStorage.getItem(storageKey);
+    
+    if (cachedData) {
+      const parsedData: CachedChapter = JSON.parse(cachedData);
+      console.log(`Loaded chapter ${parsedData.reference} from offline storage`);
+      return parsedData.data;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error loading chapter from storage:', error);
+    return null;
+  }
+};
+
+const updateOfflineChaptersIndex = async (
+  bibleId: string, 
+  chapterId: string, 
+  reference: string
+): Promise<void> => {
+  try {
+    const existingIndex = await AsyncStorage.getItem(STORAGE_KEYS.OFFLINE_CHAPTERS);
+    const index = existingIndex ? JSON.parse(existingIndex) : {};
+    
+    if (!index[bibleId]) {
+      index[bibleId] = {};
+    }
+    
+    index[bibleId][chapterId] = {
+      reference,
+      cachedAt: Date.now(),
+    };
+    
+    await AsyncStorage.setItem(STORAGE_KEYS.OFFLINE_CHAPTERS, JSON.stringify(index));
+  } catch (error) {
+    console.error('Error updating offline chapters index:', error);
+  }
+};
+
+// Get offline chapters for a bible
+export const getOfflineChapters = async (bibleId: string) => {
+  try {
+    const indexData = await AsyncStorage.getItem(STORAGE_KEYS.OFFLINE_CHAPTERS);
+    if (indexData) {
+      const index = JSON.parse(indexData);
+      return index[bibleId] || {};
+    }
+    return {};
+  } catch (error) {
+    console.error('Error getting offline chapters:', error);
+    return {};
+  }
+};
+
+// Clear offline data for a specific chapter
+export const clearOfflineChapter = async (bibleId: string, chapterId: string) => {
+  try {
+    const storageKey = STORAGE_KEYS.CHAPTER(bibleId, chapterId);
+    await AsyncStorage.removeItem(storageKey);
+    
+    // Update index
+    const indexData = await AsyncStorage.getItem(STORAGE_KEYS.OFFLINE_CHAPTERS);
+    if (indexData) {
+      const index = JSON.parse(indexData);
+      if (index[bibleId] && index[bibleId][chapterId]) {
+        delete index[bibleId][chapterId];
+        await AsyncStorage.setItem(STORAGE_KEYS.OFFLINE_CHAPTERS, JSON.stringify(index));
+      }
+    }
+    
+    console.log(`Cleared offline data for chapter ${chapterId}`);
+  } catch (error) {
+    console.error('Error clearing offline chapter:', error);
+  }
+};
+
+// Clear all offline data
+export const clearAllOfflineData = async () => {
+  try {
+    const indexData = await AsyncStorage.getItem(STORAGE_KEYS.OFFLINE_CHAPTERS);
+    if (indexData) {
+      const index = JSON.parse(indexData);
+      
+      // Remove all cached chapters
+      for (const bibleId in index) {
+        for (const chapterId in index[bibleId]) {
+          const storageKey = STORAGE_KEYS.CHAPTER(bibleId, chapterId);
+          await AsyncStorage.removeItem(storageKey);
+        }
+      }
+    }
+    
+    // Clear the index
+    await AsyncStorage.removeItem(STORAGE_KEYS.OFFLINE_CHAPTERS);
+    console.log('All offline data cleared');
+  } catch (error) {
+    console.error('Error clearing all offline data:', error);
+  }
+};
 
 // Get all available Bibles
 export function useGetBibles() {
@@ -179,25 +341,85 @@ export function useGetChapters(bibleId: string, bookId: string) {
   });
 }
 
-// Get a specific chapter content
+// Get a specific chapter content with offline caching
 export function useGetChapter(bibleId: string, chapterId: string) {
   return useQuery({
     queryKey: ['chapter', bibleId, chapterId],
     queryFn: async (): Promise<ChapterResponse> => {
+      // Check if we're online
+      const online = await isOnline();
+      
+      if (!online) {
+        // Try to get from offline storage
+        const cachedChapter = await getChapterFromStorage(bibleId, chapterId);
+        if (cachedChapter) {
+          return cachedChapter;
+        }
+        throw new Error('Chapter not available offline. Please connect to the internet to download it.');
+      }
+
+      // We're online, fetch from API
+      const response = await fetch(`${API_BASE_URL}/bibles/${bibleId}/chapters/${chapterId}`, {
+        headers: getHeaders(),
+      });
+
+      if (!response.ok) {
+        // If API fails, try offline storage as fallback
+        const cachedChapter = await getChapterFromStorage(bibleId, chapterId);
+        if (cachedChapter) {
+          console.log('API failed, using cached version');
+          return cachedChapter;
+        }
+        
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to fetch chapter');
+      }
+
+      const chapterData = await response.json();
+      
+      // Save to offline storage after successful fetch
+      await saveChapterToStorage(bibleId, chapterId, chapterData);
+      
+      return chapterData;
+    },
+    enabled: !!bibleId && !!chapterId,
+    staleTime: 60 * 60 * 1000, // 1 hour (chapter content rarely changes)
+    cacheTime: 24 * 60 * 60 * 1000, // 24 hours
+    retry: (failureCount, error) => {
+      // Don't retry if we're offline and have no cached data
+      if (error.message.includes('not available offline')) {
+        return false;
+      }
+      return failureCount < 3;
+    },
+  });
+}
+
+// Hook to preload a chapter for offline use
+export function usePreloadChapter() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ bibleId, chapterId }: { bibleId: string; chapterId: string }) => {
       const response = await fetch(`${API_BASE_URL}/bibles/${bibleId}/chapters/${chapterId}`, {
         headers: getHeaders(),
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'Failed to fetch chapter');
+        throw new Error(error.message || 'Failed to preload chapter');
       }
 
-      return response.json();
+      const chapterData = await response.json();
+      
+      // Save to offline storage
+      await saveChapterToStorage(bibleId, chapterId, chapterData);
+      
+      // Also update the query cache
+      queryClient.setQueryData(['chapter', bibleId, chapterId], chapterData);
+      
+      return chapterData;
     },
-    enabled: !!bibleId && !!chapterId,
-    staleTime: 60 * 60 * 1000, // 1 hour (chapter content rarely changes)
-    cacheTime: 24 * 60 * 60 * 1000, // 24 hours
   });
 }
 
@@ -278,4 +500,3 @@ export function useGetVerse(bibleId: string, verseId: string) {
     cacheTime: 24 * 60 * 60 * 1000, // 24 hours
   });
 }
-

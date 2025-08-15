@@ -8,15 +8,14 @@ import {
   SafeAreaView,
   StatusBar,
   TextInput,
-  Dimensions,
-  FlatList,
+
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useBibleSearch, useGetBooks } from '@/hooks/ApiConfig';
 
-const { width } = Dimensions.get('window');
+
 
 interface SearchResult {
   id: string;
@@ -60,16 +59,10 @@ const BibleSearchScreen: React.FC = () => {
   const [totalResults, setTotalResults] = useState<number>(0);
   const resultsPerPage = 20;
   const [bibleVersion] = useState<string>('de4e12af7f28f599-02'); // Default version
-  const [filters, setFilters] = useState<SearchFilter[]>([
-    { id: '1', label: 'Old Testament', value: 'old_testament', selected: false },
-    { id: '2', label: 'New Testament', value: 'new_testament', selected: false },
-    { id: '3', label: 'Psalms', value: 'psalms', selected: false },
-    { id: '4', label: 'Gospels', value: 'gospels', selected: false },
-  ]);
 
   const searchInputRef = useRef<TextInput>(null);
 
-  // API hooks
+
   const bibleSearch = useBibleSearch();
   const { data: booksResponse } = useGetBooks(bibleVersion);
 
@@ -95,14 +88,9 @@ const BibleSearchScreen: React.FC = () => {
     return booksResponse.data.find(book => book.id === bookId);
   };
 
-  // Helper function to parse verse reference and IDs from API response
+
   const parseVerseData = (verse: any) => {
-    // From your API response, we can see:
-    // - id: "1CO.1.21" (book.chapter.verse)
-    // - orgId: "1CO.1.21" 
-    // - reference: "1 Corinthians 1:21"
-    // - chapterId: "1CO.1"
-    // - bookId: "1CO"
+
     
     const idParts = verse.id.split('.');
     const bookId = verse.bookId || idParts[0];
@@ -160,8 +148,7 @@ const BibleSearchScreen: React.FC = () => {
         const formattedResults: SearchResult[] = response.data.verses.map((verse) => {
           const bookInfo = getBookInfo(verse.bookId);
           const { bookId, chapterId, chapter, verse: verseNumber } = parseVerseData(verse);
-          
-          // Clean the text content - API returns 'text' field, not 'content'
+
           const cleanText = (verse.text || verse.content || '').replace(/<[^>]*>/g, '');
           
           return {
@@ -216,13 +203,6 @@ const BibleSearchScreen: React.FC = () => {
     handleSearch(query);
   };
 
-  const toggleFilter = (filterId: string) => {
-    setFilters(prev => prev.map(filter => 
-      filter.id === filterId 
-        ? { ...filter, selected: !filter.selected }
-        : filter
-    ));
-  };
 
   const clearSearch = () => {
     setSearchQuery('');
@@ -259,24 +239,8 @@ const BibleSearchScreen: React.FC = () => {
       <View style={styles.searchResultHeader}>
         <Text style={styles.searchResultReference}>{item.reference}</Text>
         <View style={styles.searchResultActions}>
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              // Add bookmark functionality here
-            }}
-          >
-            <Ionicons name="bookmark-outline" size={16} color="#6B7280" />
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              // Add share functionality here
-            }}
-          >
-            <Ionicons name="share-outline" size={16} color="#6B7280" />
-          </TouchableOpacity>
+   
+     
         </View>
       </View>
       <Text style={styles.searchResultText} numberOfLines={3}>
@@ -492,7 +456,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 3,
     gap: 12,
   },
   searchInput: {
@@ -504,7 +468,7 @@ const styles = StyleSheet.create({
   searchButton: {
     backgroundColor: '#3B82F6',
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 2,
     borderRadius: 12,
     justifyContent: 'center',
   },
@@ -563,11 +527,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+marginTop: 12
   },
   searchResultHeader: {
     flexDirection: 'row',
@@ -633,8 +593,12 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
+    marginTop: 16,
+
     fontFamily: 'Nunito-SemiBold',
     color: '#111827',
+    paddingHorizontal: 16,
+
   },
   clearAllText: {
     fontSize: 14,
@@ -663,6 +627,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   popularSearchesContainer: {
+    marginTop: 16,
     paddingHorizontal: 16,
     gap: 8,
   },
@@ -672,7 +637,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     padding: 16,
     borderRadius: 12,
+    
   },
+
   popularSearchIcon: {
     width: 40,
     height: 40,
