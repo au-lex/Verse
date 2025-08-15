@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,101 +9,270 @@ import {
   StatusBar,
   Dimensions,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useGetChapter, useGetBooks, useGetChapters } from '@/hooks/ApiConfig';
 
 const { width } = Dimensions.get('window');
 
-interface Verse {
+interface ParsedVerse {
   number: number;
   text: string;
+  id?: string;
 }
 
 interface ChapterData {
   book: string;
   chapter: number;
   version: string;
-  verses: Verse[];
+  verses: ParsedVerse[];
+  reference: string;
+  copyright?: string;
 }
 
 const BibleReader: React.FC = () => {
   const params = useLocalSearchParams();
-  const version = params.version as string || 'NIV';
+  const version = params.version as string || 'de4e12af7f28f599-02';
   const bookId = params.bookId as string;
   const bookName = params.bookName as string;
-  const chapter = parseInt(params.chapter as string) || 1;
-  const selectedVerse = params.verse ? parseInt(params.verse as string) : null;
+  const chapterNumber = parseInt(params.chapterNumber as string) || 1;
+  const chapterId = params.chapterId as string;
+  const selectedVerseId = params.verseId as string;
+  const selectedVerseNumber = params.verseNumber ? parseInt(params.verseNumber as string) : null;
   
-  const [chapterData, setChapterData] = useState<ChapterData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [fontSize, setFontSize] = useState(16);
   const [showSettings, setShowSettings] = useState(false);
+  const [parsedChapterData, setParsedChapterData] = useState<ChapterData | null>(null);
+  const scrollViewRef = React.useRef<ScrollView>(null);
+  const verseRefs = React.useRef<{ [key: number]: View | null }>({});
 
-  useEffect(() => {
-    loadChapterData();
-  }, [bookId, chapter, version]);
+  // API hooks
+  const { data: chapterResponse, isLoading: chapterLoading, error: chapterError } = useGetChapter(version, chapterId);
+  const { data: booksResponse } = useGetBooks(version);
+  const { data: chaptersResponse } = useGetChapters(version, bookId);
 
-  const loadChapterData = async () => {
-    setLoading(true);
+  // Get current book info
+  const currentBook = useMemo(() => {
+    if (!booksResponse?.data || !bookId) return null;
+    return booksResponse.data.find(book => book.id === bookId);
+  }, [booksResponse?.data, bookId]);
+
+  // Get available chapters for navigation
+  const availableChapters = useMemo(() => {
+    return chaptersResponse?.data || [];
+  }, [chaptersResponse?.data]);
+
+  // Parse HTML content to extract verses
+  const parseChapterContent = (htmlContent: string): ParsedVerse[] => {
+    if (!htmlContent) return [];
+    
     try {
-      // Mock Bible data - replace with your actual Bible API/database
-      const mockData = getMockChapterData(bookId, chapter, version);
-      setChapterData(mockData);
+      // Remove extra whitespace and normalize
+      const cleanContent = htmlContent.replace(/\s+/g, ' ').trim();
+      
+      // Try to match verse patterns with various formats
+      const versePatterns = [
+        // Pattern 1: <span class="v" id="verse-id">verse-number</span>verse-text
+        /<span[^>]*class="v"[^>]*>(\d+)<\/span>([^<]*(?:<[^>]*>[^<]*<\/[^>]*>[^<]*)*?)(?=<span[^>]*class="v"|$)/gi,
+        // Pattern 2: <span class="verse-num">verse-number</span>verse-text
+        /<span[^>]*class="verse-num"[^>]*>(\d+)<\/span>([^<]*(?:<[^>]*>[^<]*<\/[^>]*>[^<]*)*?)(?=<span[^>]*class="verse-num"|$)/gi,
+        // Pattern 3: <sup class="versenum">verse-number</sup>verse-text
+        /<sup[^>]*class="versenum"[^>]*>(\d+)<\/sup>([^<]*(?:<[^>]*>[^<]*<\/[^>]*>[^<]*)*?)(?=<sup[^>]*class="versenum"|$)/gi,
+        // Pattern 4: Any span with data-verse or similar
+        /<span[^>]*(?:data-verse|data-v)="(\d+)"[^>]*>.*?<\/span>([^<]*(?:<[^>]*>[^<]*<\/[^>]*>[^<]*)*?)(?=<span[^>]*(?:data-verse|data-v)="\d+"|$)/gi
+      ];
+
+      let verses: ParsedVerse[] = [];
+      
+      for (const pattern of versePatterns) {
+        const matches = [...cleanContent.matchAll(pattern)];
+        
+        if (matches.length > 0) {
+          verses = matches.map(match => {
+            const verseNumber = parseInt(match[1]);
+            let verseText = match[2] || '';
+            
+            // Clean up the verse text
+            verseText = verseText
+              .replace(/<[^>]*>/g, ' ') // Remove HTML tags
+              .replace(/\s+/g, ' ') // Normalize whitespace
+              .trim();
+            
+            return {
+              number: verseNumber,
+              text: verseText,
+              id: `${bookId}.${chapterNumber}.${verseNumber}`
+            };
+          }).filter(verse => verse.text.length > 0);
+          
+          if (verses.length > 0) {
+            break; // Use the first pattern that gives results
+          }
+        }
+      }
+
+      // If no verses found with patterns, try to split by common verse markers
+      if (verses.length === 0) {
+        // Try splitting by numbers at the beginning of segments
+        const segments = cleanContent.split(/(?=\d+(?:\s|&nbsp;))/);
+        
+        verses = segments.map((segment, index) => {
+          const numberMatch = segment.match(/^(\d+)(?:\s|&nbsp;)(.*)/);
+          if (numberMatch) {
+            const verseNumber = parseInt(numberMatch[1]);
+            let verseText = numberMatch[2] || '';
+            
+            // Clean up text
+            verseText = verseText
+              .replace(/<[^>]*>/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim();
+              
+            return {
+              number: verseNumber,
+              text: verseText,
+              id: `${bookId}.${chapterNumber}.${verseNumber}`
+            };
+          }
+          return null;
+        }).filter((verse): verse is ParsedVerse => 
+          verse !== null && verse.text.length > 0
+        );
+      }
+
+      // Sort verses by number and ensure they're sequential
+      verses.sort((a, b) => a.number - b.number);
+      
+      // If still no verses, create a single verse with the entire content
+      if (verses.length === 0 && cleanContent.length > 0) {
+        const cleanText = cleanContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        if (cleanText) {
+          verses = [{
+            number: 1,
+            text: cleanText,
+            id: `${bookId}.${chapterNumber}.1`
+          }];
+        }
+      }
+
+      return verses;
     } catch (error) {
-      console.error('Error loading chapter data:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error parsing chapter content:', error);
+      return [];
     }
   };
 
-  // Mock function - replace with your actual data source
-  const getMockChapterData = (bookId: string, chapter: number, version: string): ChapterData => {
-    // This is Genesis 1 as an example - you should replace this with your Bible API
-    const genesis1Verses: Verse[] = [
-      { number: 1, text: "In the beginning God created the heavens and the earth." },
-      { number: 2, text: "Now the earth was formless and empty, darkness was over the surface of the deep, and the Spirit of God was hovering over the waters." },
-      { number: 3, text: "And God said, \"Let there be light,\" and there was light." },
-      { number: 4, text: "God saw that the light was good, and he separated the light from the darkness." },
-      { number: 5, text: "God called the light \"day,\" and the darkness he called \"night.\" And there was evening, and there was morning—the first day." },
-      { number: 6, text: "And God said, \"Let there be a vault between the waters to separate water from water.\"" },
-      { number: 7, text: "So God made the vault and separated the water under the vault from the water above it. And it was so." },
-      { number: 8, text: "God called the vault \"sky.\" And there was evening, and there was morning—the second day." },
-      { number: 9, text: "And God said, \"Let the water under the sky be gathered to one place, and let dry ground appear.\" And it was so." },
-      { number: 10, text: "God called the dry ground \"land,\" and the gathered waters he called \"seas.\" And God saw that it was good." },
-      { number: 11, text: "Then God said, \"Let the land produce vegetation: seed-bearing plants and trees on the land that bear fruit with seed in it, according to their various kinds.\" And it was so." },
-      { number: 12, text: "The land produced vegetation: plants bearing seed according to their kinds and trees bearing fruit with seed in it according to their kinds. And God saw that it was good." },
-      { number: 13, text: "And there was evening, and there was morning—the third day." }
-    ];
+  // Process chapter data when it loads
+  useEffect(() => {
+    if (chapterResponse?.data) {
+      const chapter = chapterResponse.data;
+      
+      if (chapter.content) {
+        const verses = parseChapterContent(chapter.content);
+        
+        setParsedChapterData({
+          book: currentBook?.name || bookName || 'Unknown',
+          chapter: parseInt(chapter.number) || chapterNumber,
+          version: version,
+          verses: verses,
+          reference: chapter.reference || `${bookName} ${chapterNumber}`,
+          copyright: chapter.copyright
+        });
+      } else {
+        // If no content, show error or placeholder
+        setParsedChapterData({
+          book: currentBook?.name || bookName || 'Unknown',
+          chapter: chapterNumber,
+          version: version,
+          verses: [{
+            number: 1,
+            text: 'Content not available for this chapter.',
+            id: `${bookId}.${chapterNumber}.1`
+          }],
+          reference: `${bookName} ${chapterNumber}`,
+          copyright: chapter.copyright
+        });
+      }
+    }
+  }, [chapterResponse, currentBook, bookName, chapterNumber, bookId, version]);
 
-    return {
-      book: bookId === 'genesis' ? 'Genesis' : bookName,
-      chapter: chapter,
-      version: version,
-      verses: genesis1Verses
-    };
+  // Scroll to selected verse when data loads
+  useEffect(() => {
+    if (parsedChapterData && selectedVerseNumber && scrollViewRef.current) {
+      // Give the ScrollView time to render
+      const timer = setTimeout(() => {
+        const verseRef = verseRefs.current[selectedVerseNumber];
+        if (verseRef) {
+          verseRef.measureLayout(
+            scrollViewRef.current as any,
+            (x, y) => {
+              scrollViewRef.current?.scrollTo({ 
+                y: Math.max(0, y - 100), // Offset by 100px for better visibility
+                animated: true 
+              });
+            },
+            () => {
+              // Fallback: scroll to approximate position
+              const verseIndex = parsedChapterData.verses.findIndex(v => v.number === selectedVerseNumber);
+              if (verseIndex > 0) {
+                const estimatedY = verseIndex * 80; // Approximate verse height
+                scrollViewRef.current?.scrollTo({ 
+                  y: Math.max(0, estimatedY - 100), 
+                  animated: true 
+                });
+              }
+            }
+          );
+        }
+      }, 300);
+
+      return () => clearTimeout(timer);
+    }
+  }, [parsedChapterData, selectedVerseNumber]);
+
+  // Navigate to different chapter
+  const navigateChapter = (direction: 'prev' | 'next') => {
+    if (!availableChapters || availableChapters.length === 0) return;
+    
+    const currentIndex = availableChapters.findIndex(ch => ch.id === chapterId);
+    const newIndex = direction === 'prev' ? currentIndex - 1 : currentIndex + 1;
+    
+    if (newIndex >= 0 && newIndex < availableChapters.length) {
+      const newChapter = availableChapters[newIndex];
+      
+      router.push({
+        pathname: '/read/bible-reader',
+        params: {
+          version,
+          bookId,
+          bookName: currentBook?.name || bookName,
+          chapterId: newChapter.id,
+          chapterNumber: newChapter.number
+        }
+      });
+    }
   };
 
-  const navigateChapter = (direction: 'prev' | 'next') => {
-    const newChapter = direction === 'prev' ? chapter - 1 : chapter + 1;
-    if (newChapter < 1) return; // Handle book boundaries
-    
+  // Navigate to different book (basic implementation)
+  const navigateToBookSelection = () => {
     router.push({
-      pathname: '/bible-reader',
-      params: {
-        version,
-        bookId,
-        bookName,
-        chapter: newChapter.toString()
-      }
+      pathname: '/read/book-selection',
+      params: { version }
     });
   };
 
-  const VerseComponent: React.FC<{ verse: Verse; isHighlighted: boolean }> = ({ 
+  const VerseComponent: React.FC<{ verse: ParsedVerse; isHighlighted: boolean }> = ({ 
     verse, 
     isHighlighted 
   }) => (
-    <View style={styles.verseContainer}>
+    <View 
+      style={styles.verseContainer}
+      ref={(ref) => {
+        verseRefs.current[verse.number] = ref;
+      }}
+    >
       <View style={[styles.verseContent, isHighlighted && styles.highlightedVerse]}>
         <Text style={[styles.verseNumber, { fontSize: fontSize - 2 }]}>
           {verse.number}
@@ -133,13 +302,34 @@ const BibleReader: React.FC = () => {
     </View>
   );
 
-  if (loading) {
+  // Loading state
+  if (chapterLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3B82F6" />
           <Text style={styles.loadingText}>Loading chapter...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Error state
+  if (chapterError) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle-outline" size={48} color="#EF4444" />
+          <Text style={styles.errorTitle}>Failed to load chapter</Text>
+          <Text style={styles.errorSubtitle}>Please check your connection and try again</Text>
+          <TouchableOpacity 
+            style={styles.retryButton}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.retryButtonText}>Go Back</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -156,26 +346,51 @@ const BibleReader: React.FC = () => {
         </TouchableOpacity>
         
         <View style={styles.headerCenter}>
-          <View style={styles.chapterNavigation}>
-            <TouchableOpacity
-              style={styles.navButton}
-              onPress={() => navigateChapter('prev')}
-              disabled={chapter <= 1}
-            >
-              <Ionicons name="chevron-back" size={20} color={chapter <= 1 ? "#9CA3AF" : "#111827"} />
-            </TouchableOpacity>
-            
-            <View style={styles.chapterInfo}>
-              <Text style={styles.chapterTitle}>{chapterData?.book} {chapterData?.chapter}</Text>
+          <TouchableOpacity onPress={navigateToBookSelection}>
+            <View style={styles.chapterNavigation}>
+              <TouchableOpacity
+                style={styles.navButton}
+                onPress={() => navigateChapter('prev')}
+                disabled={!availableChapters || availableChapters.findIndex(ch => ch.id === chapterId) <= 0}
+              >
+                <Ionicons 
+                  name="chevron-back" 
+                  size={20} 
+                  color={
+                    !availableChapters || availableChapters.findIndex(ch => ch.id === chapterId) <= 0
+                      ? "#9CA3AF" 
+                      : "#111827"
+                  } 
+                />
+              </TouchableOpacity>
+              
+              <View style={styles.chapterInfo}>
+                <Text style={styles.chapterTitle}>
+                  {parsedChapterData?.book} {parsedChapterData?.chapter}
+                </Text>
+              </View>
+              
+              <TouchableOpacity
+                style={styles.navButton}
+                onPress={() => navigateChapter('next')}
+                disabled={
+                  !availableChapters || 
+                  availableChapters.findIndex(ch => ch.id === chapterId) >= availableChapters.length - 1
+                }
+              >
+                <Ionicons 
+                  name="chevron-forward" 
+                  size={20} 
+                  color={
+                    !availableChapters || 
+                    availableChapters.findIndex(ch => ch.id === chapterId) >= availableChapters.length - 1
+                      ? "#9CA3AF" 
+                      : "#111827"
+                  } 
+                />
+              </TouchableOpacity>
             </View>
-            
-            <TouchableOpacity
-              style={styles.navButton}
-              onPress={() => navigateChapter('next')}
-            >
-              <Ionicons name="chevron-forward" size={20} color="#111827" />
-            </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
         </View>
         
         <TouchableOpacity onPress={() => setShowSettings(!showSettings)}>
@@ -192,6 +407,7 @@ const BibleReader: React.FC = () => {
 
       {/* Chapter Content */}
       <ScrollView 
+        ref={scrollViewRef}
         style={styles.content} 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -199,22 +415,39 @@ const BibleReader: React.FC = () => {
         <View style={styles.chapterContainer}>
           <View style={styles.chapterHeader}>
             <Text style={styles.chapterHeaderTitle}>
-              {chapterData?.book} {chapterData?.chapter}
+              {parsedChapterData?.reference}
             </Text>
             <Text style={styles.chapterHeaderVersion}>
-              {chapterData?.version}
+              {parsedChapterData?.version}
             </Text>
           </View>
           
           <View style={styles.versesContainer}>
-            {chapterData?.verses.map((verse) => (
+            {parsedChapterData?.verses.map((verse) => (
               <VerseComponent
-                key={verse.number}
+                key={verse.id || verse.number}
                 verse={verse}
-                isHighlighted={selectedVerse === verse.number}
+                isHighlighted={selectedVerseNumber === verse.number}
               />
             ))}
+            
+            {parsedChapterData?.verses.length === 0 && (
+              <View style={styles.noContentContainer}>
+                <Ionicons name="book-outline" size={48} color="#9CA3AF" />
+                <Text style={styles.noContentTitle}>No content available</Text>
+                <Text style={styles.noContentSubtitle}>This chapter may not have content in this version</Text>
+              </View>
+            )}
           </View>
+          
+          {/* Copyright notice */}
+          {parsedChapterData?.copyright && (
+            <View style={styles.copyrightContainer}>
+              <Text style={styles.copyrightText}>
+                {parsedChapterData.copyright.replace(/<[^>]*>/g, '')}
+              </Text>
+            </View>
+          )}
         </View>
         
         {/* Bottom spacing */}
@@ -239,6 +472,37 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Regular',
     color: '#6B7280',
     marginTop: 12,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    gap: 16,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#EF4444',
+    textAlign: 'center',
+  },
+  errorSubtitle: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  retryButtonText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#FFFFFF',
   },
   header: {
     flexDirection: 'row',
@@ -361,6 +625,37 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Regular',
     color: '#111827',
     lineHeight: 24,
+  },
+  noContentContainer: {
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  noContentTitle: {
+    fontSize: 18,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#111827',
+    marginTop: 16,
+  },
+  noContentSubtitle: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#6B7280',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  copyrightContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+  },
+  copyrightText: {
+    fontSize: 12,
+    fontFamily: 'Nunito-Regular',
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });
 

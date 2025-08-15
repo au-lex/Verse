@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,226 +10,97 @@ import {
   TextInput,
   Dimensions,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useGetBibles } from '@/hooks/ApiConfig';
 
 const { width } = Dimensions.get('window');
 
-interface BibleVersion {
+interface Bible {
   id: string;
-  name: string;
+  dblId: string;
   abbreviation: string;
+  abbreviationLocal: string;
+  name: string;
+  nameLocal: string;
   description: string;
-  language: string;
-  category: 'popular' | 'english' | 'modern' | 'traditional' | 'study';
-  isDownloaded: boolean;
-  downloadSize?: string;
-  isSelected?: boolean;
+  descriptionLocal: string;
+  language: {
+    id: string;
+    name: string;
+    nameLocal: string;
+    script: string;
+    scriptDirection: string;
+  };
+  countries: Array<{
+    id: string;
+    name: string;
+    nameLocal: string;
+  }>;
+  type: string;
+  updatedAt: string;
+  relatedDbl?: string;
+  audioBibles?: Bible[];
 }
 
-interface VersionCategory {
-  id: string;
-  title: string;
-  description: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  versions: BibleVersion[];
-}
+const ITEMS_PER_PAGE = 10;
 
 const BibleVersionScreen: React.FC = () => {
-  const [selectedVersion, setSelectedVersion] = useState<string>('niv');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [activeCategory, setActiveCategory] = useState<string>('popular');
-  const [downloadingVersions, setDownloadingVersions] = useState<Set<string>>(new Set());
+  const [selectedVersion, setSelectedVersion] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
 
-  const versionCategories: VersionCategory[] = [
-    {
-      id: 'popular',
-      title: 'Popular Versions',
-      description: 'Most commonly used Bible translations',
-      icon: 'star-outline',
-      versions: [
-        {
-          id: 'niv',
-          name: 'New International Version',
-          abbreviation: 'NIV',
-          description: 'A balanced translation that combines accuracy with readability',
-          language: 'English',
-          category: 'popular',
-          isDownloaded: true,
-        },
-        {
-          id: 'esv',
-          name: 'English Standard Version',
-          abbreviation: 'ESV',
-          description: 'Essentially literal translation emphasizing word-for-word accuracy',
-          language: 'English',
-          category: 'popular',
-          isDownloaded: true,
-        },
-        {
-          id: 'nlt',
-          name: 'New Living Translation',
-          abbreviation: 'NLT',
-          description: 'Thought-for-thought translation for easy understanding',
-          language: 'English',
-          category: 'popular',
-          isDownloaded: false,
-          downloadSize: '12 MB',
-        },
-        {
-          id: 'kjv',
-          name: 'King James Version',
-          abbreviation: 'KJV',
-          description: 'Classic translation with traditional English',
-          language: 'English',
-          category: 'popular',
-          isDownloaded: true,
-        },
-      ]
-    },
-    {
-      id: 'modern',
-      title: 'Modern Translations',
-      description: 'Contemporary language translations',
-      icon: 'time-outline',
-      versions: [
-        {
-          id: 'msg',
-          name: 'The Message',
-          abbreviation: 'MSG',
-          description: 'Contemporary paraphrase in modern American English',
-          language: 'English',
-          category: 'modern',
-          isDownloaded: false,
-          downloadSize: '8 MB',
-        },
-        {
-          id: 'ceb',
-          name: 'Common English Bible',
-          abbreviation: 'CEB',
-          description: 'Translation using common English for broad accessibility',
-          language: 'English',
-          category: 'modern',
-          isDownloaded: false,
-          downloadSize: '11 MB',
-        },
-        {
-          id: 'csb',
-          name: 'Christian Standard Bible',
-          abbreviation: 'CSB',
-          description: 'Optimal blend of accuracy and readability',
-          language: 'English',
-          category: 'modern',
-          isDownloaded: false,
-          downloadSize: '10 MB',
-        },
-      ]
-    },
-    {
-      id: 'study',
-      title: 'Study Bibles',
-      description: 'Enhanced versions with study notes and commentary',
-      icon: 'school-outline',
-      versions: [
-        {
-          id: 'nasb',
-          name: 'New American Standard Bible',
-          abbreviation: 'NASB',
-          description: 'Literal translation preferred for detailed Bible study',
-          language: 'English',
-          category: 'study',
-          isDownloaded: false,
-          downloadSize: '15 MB',
-        },
-        {
-          id: 'rsv',
-          name: 'Revised Standard Version',
-          abbreviation: 'RSV',
-          description: 'Scholarly translation maintaining literary quality',
-          language: 'English',
-          category: 'study',
-          isDownloaded: false,
-          downloadSize: '13 MB',
-        },
-      ]
-    },
-    {
-      id: 'traditional',
-      title: 'Traditional Versions',
-      description: 'Historic and traditional translations',
-      icon: 'library-outline',
-      versions: [
-        {
-          id: 'nkjv',
-          name: 'New King James Version',
-          abbreviation: 'NKJV',
-          description: 'Updated KJV with modern English while preserving the original style',
-          language: 'English',
-          category: 'traditional',
-          isDownloaded: false,
-          downloadSize: '12 MB',
-        },
-        {
-          id: 'amp',
-          name: 'Amplified Bible',
-          abbreviation: 'AMP',
-          description: 'Expands on the meaning of key words and phrases',
-          language: 'English',
-          category: 'traditional',
-          isDownloaded: false,
-          downloadSize: '18 MB',
-        },
-      ]
+  // Fetch bibles from API
+  const { data: biblesResponse, isLoading, error } = useGetBibles();
+
+  // Get filtered and paginated versions
+  const { filteredVersions, totalPages, hasNextPage, hasPreviousPage } = useMemo(() => {
+    if (!biblesResponse?.data) {
+      return { filteredVersions: [], totalPages: 0, hasNextPage: false, hasPreviousPage: false };
     }
-  ];
 
-  const getCurrentVersions = (): BibleVersion[] => {
-    const category = versionCategories.find(cat => cat.id === activeCategory);
-    if (!category) return [];
-    
-    let versions = category.versions;
-    
+    let versions = biblesResponse.data;
+
+    // Apply search filter
     if (searchQuery.trim()) {
-      versions = versions.filter(version => 
-        version.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        version.abbreviation.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        version.description.toLowerCase().includes(searchQuery.toLowerCase())
+      versions = versions.filter(bible => 
+        bible.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        bible.abbreviation.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        // bible.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        bible.language.name.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
-    
-    return versions;
-  };
+
+    const totalCount = versions.length;
+    const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const paginatedVersions = versions.slice(startIndex, endIndex);
+
+    return {
+      filteredVersions: paginatedVersions,
+      totalPages,
+      hasNextPage: currentPage < totalPages,
+      hasPreviousPage: currentPage > 1
+    };
+  }, [biblesResponse?.data, searchQuery, currentPage]);
+
+  // Reset pagination when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
 
   const handleVersionSelect = (versionId: string) => {
     setSelectedVersion(versionId);
   };
 
-  const handleDownloadVersion = async (versionId: string) => {
-    setDownloadingVersions(prev => new Set([...prev, versionId]));
-    
-    // Simulate download
-    setTimeout(() => {
-      setDownloadingVersions(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(versionId);
-        return newSet;
-      });
-      
-      // Update version as downloaded
-      Alert.alert('Download Complete', 'Bible version downloaded successfully!');
-    }, 3000);
-  };
-
   const handleContinue = () => {
-    const selectedVersionData = versionCategories
-      .flatMap(cat => cat.versions)
-      .find(version => version.id === selectedVersion);
-    
-    if (!selectedVersionData?.isDownloaded) {
+    if (!selectedVersion) {
       Alert.alert(
-        'Version Not Available',
-        'Please download the selected version first or choose a downloaded version.',
+        'No Version Selected',
+        'Please select a Bible version to continue.',
         [{ text: 'OK' }]
       );
       return;
@@ -237,61 +108,79 @@ const BibleVersionScreen: React.FC = () => {
     
     // Navigate to Bible reading with selected version
     router.push({
-      pathname: '/bible-reader',
+      pathname: '/read/book-selection',
       params: { version: selectedVersion }
     });
   };
 
-  const VersionCard: React.FC<{ version: BibleVersion }> = ({ version }) => (
+  const handleNextPage = () => {
+    if (hasNextPage) {
+      setCurrentPage(prev => prev + 1);
+    }
+  };
+
+  const handlePreviousPage = () => {
+    if (hasPreviousPage) {
+      setCurrentPage(prev => prev - 1);
+    }
+  };
+
+  const VersionCard: React.FC<{ bible: Bible }> = ({ bible }) => (
     <TouchableOpacity
       style={[
         styles.versionCard,
-        selectedVersion === version.id && styles.selectedVersionCard
+        selectedVersion === bible.id && styles.selectedVersionCard
       ]}
-      onPress={() => handleVersionSelect(version.id)}
+      onPress={() => handleVersionSelect(bible.id)}
       activeOpacity={0.7}
     >
       <View style={styles.versionHeader}>
         <View style={styles.versionInfo}>
           <View style={styles.versionTitleRow}>
-            <Text style={styles.versionAbbreviation}>{version.abbreviation}</Text>
-            {version.isDownloaded && (
-              <View style={styles.downloadedBadge}>
-                <Ionicons name="checkmark-circle" size={16} color="#10B981" />
-              </View>
-            )}
+            <Text style={styles.versionAbbreviation}>{bible.abbreviation}</Text>
+            <View style={styles.languageBadge}>
+              <Text style={styles.languageText}>{bible.language.name}</Text>
+            </View>
           </View>
-          <Text style={styles.versionName}>{version.name}</Text>
-          <Text style={styles.versionDescription}>{version.description}</Text>
+          <Text style={styles.versionName}>{bible.name}</Text>
+          <Text style={styles.versionDescription}>{bible.description}</Text>
         </View>
         
         <View style={styles.versionActions}>
-          {selectedVersion === version.id && (
+          {selectedVersion === bible.id && (
             <View style={styles.selectedIndicator}>
               <Ionicons name="checkmark-circle" size={24} color="#3B82F6" />
             </View>
-          )}
-          
-          {!version.isDownloaded && (
-            <TouchableOpacity
-              style={styles.downloadButton}
-              onPress={() => handleDownloadVersion(version.id)}
-              disabled={downloadingVersions.has(version.id)}
-            >
-              {downloadingVersions.has(version.id) ? (
-                <Ionicons name="download-outline" size={20} color="#6B7280" />
-              ) : (
-                <>
-                  <Ionicons name="cloud-download-outline" size={16} color="#3B82F6" />
-                  <Text style={styles.downloadButtonText}>{version.downloadSize}</Text>
-                </>
-              )}
-            </TouchableOpacity>
           )}
         </View>
       </View>
     </TouchableOpacity>
   );
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+          <Text style={styles.loadingText}>Loading Bible versions...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle-outline" size={48} color="#EF4444" />
+          <Text style={styles.errorTitle}>Failed to load versions</Text>
+          <Text style={styles.errorSubtitle}>Please check your connection and try again</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -328,16 +217,13 @@ const BibleVersionScreen: React.FC = () => {
         </View>
       </View>
 
-
-
-
       {/* Versions List */}
       <ScrollView style={styles.versionsContainer} showsVerticalScrollIndicator={false}>
-        {getCurrentVersions().map((version) => (
-          <VersionCard key={version.id} version={version} />
+        {filteredVersions.map((bible) => (
+          <VersionCard key={bible.id} bible={bible} />
         ))}
         
-        {getCurrentVersions().length === 0 && (
+        {filteredVersions.length === 0 && !isLoading && (
           <View style={styles.noResultsContainer}>
             <Ionicons name="search-outline" size={48} color="#9CA3AF" />
             <Text style={styles.noResultsTitle}>No versions found</Text>
@@ -346,6 +232,53 @@ const BibleVersionScreen: React.FC = () => {
         )}
       </ScrollView>
 
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <View style={styles.paginationContainer}>
+          <TouchableOpacity
+            style={[styles.pageButton, !hasPreviousPage && styles.disabledPageButton]}
+            onPress={handlePreviousPage}
+            disabled={!hasPreviousPage}
+          >
+            <Ionicons 
+              name="chevron-back" 
+              size={16} 
+              color={hasPreviousPage ? "#3B82F6" : "#9CA3AF"} 
+            />
+            <Text style={[
+              styles.pageButtonText,
+              !hasPreviousPage && styles.disabledPageButtonText
+            ]}>
+              Previous
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.pageInfo}>
+            <Text style={styles.pageText}>
+              Page {currentPage} of {totalPages}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.pageButton, !hasNextPage && styles.disabledPageButton]}
+            onPress={handleNextPage}
+            disabled={!hasNextPage}
+          >
+            <Text style={[
+              styles.pageButtonText,
+              !hasNextPage && styles.disabledPageButtonText
+            ]}>
+              Next
+            </Text>
+            <Ionicons 
+              name="chevron-forward" 
+              size={16} 
+              color={hasNextPage ? "#3B82F6" : "#9CA3AF"} 
+            />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Bottom Action */}
       <View style={styles.bottomContainer}>
         <TouchableOpacity
@@ -353,7 +286,7 @@ const BibleVersionScreen: React.FC = () => {
             styles.continueButton,
             !selectedVersion && styles.disabledButton
           ]}
-          onPress={() => router.push('/read/book-selection')}
+          onPress={handleContinue}
           disabled={!selectedVersion}
         >
           <Text style={[
@@ -377,6 +310,36 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#6B7280',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    gap: 16,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#EF4444',
+    textAlign: 'center',
+  },
+  errorSubtitle: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#6B7280',
+    textAlign: 'center',
   },
   header: {
     flexDirection: 'row',
@@ -424,19 +387,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Regular',
     color: '#111827',
   },
-
-  activeCategoryTab: {
-    backgroundColor: '#DBEAFE',
-  },
-  categoryTabText: {
-    fontSize: 14,
-    fontFamily: 'Nunito-SemiBold',
-    color: '#6B7280',
-  },
-  activeCategoryTabText: {
-    color: '#3B82F6',
-  },
-
   versionsContainer: {
     flex: 1,
     padding: 16,
@@ -448,7 +398,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 2,
     borderColor: 'transparent',
-
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   selectedVersionCard: {
     borderColor: '#3B82F6',
@@ -474,8 +431,16 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Bold',
     color: '#3B82F6',
   },
-  downloadedBadge: {
-    // Just the icon, no extra styling needed
+  languageBadge: {
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  languageText: {
+    fontSize: 10,
+    fontFamily: 'Nunito-SemiBold',
+    color: '#3B82F6',
   },
   versionName: {
     fontSize: 16,
@@ -496,19 +461,43 @@ const styles = StyleSheet.create({
   selectedIndicator: {
     // Just the icon, positioned by parent
   },
-  downloadButton: {
+  paginationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0F9FF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  pageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
     gap: 4,
   },
-  downloadButtonText: {
-    fontSize: 12,
+  disabledPageButton: {
+    opacity: 0.5,
+  },
+  pageButtonText: {
+    fontSize: 14,
     fontFamily: 'Nunito-SemiBold',
     color: '#3B82F6',
+  },
+  disabledPageButtonText: {
+    color: '#9CA3AF',
+  },
+  pageInfo: {
+    alignItems: 'center',
+  },
+  pageText: {
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#6B7280',
   },
   noResultsContainer: {
     alignItems: 'center',
@@ -525,6 +514,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Regular',
     color: '#6B7280',
     marginTop: 4,
+    textAlign: 'center',
   },
   bottomContainer: {
     padding: 16,

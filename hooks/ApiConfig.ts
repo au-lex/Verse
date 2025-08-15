@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_BASE_URL = 'https://api.scripture.api.bible/v1';
-const API_KEY = 'YOUR_API_KEY_HERE'; 
+const API_KEY = 'b809a3adcefd1e56002148d07435d7b2'; 
 
 // Types - Bible API structure
 interface Bible {
