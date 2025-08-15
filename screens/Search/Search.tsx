@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useBibleSearch, useGetBooks } from '@/hooks/ApiConfig';
 
 const { width } = Dimensions.get('window');
 
@@ -24,6 +25,9 @@ interface SearchResult {
   verse: number;
   text: string;
   reference: string;
+  bookId: string;
+  chapterId: string;
+  verseId: string;
 }
 
 interface RecentSearch {
@@ -51,7 +55,11 @@ const BibleSearchScreen: React.FC = () => {
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [showResults, setShowResults] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'all' | 'verses' | 'books'>('all');
+  const [currentPage, setCurrentPage] = useState<number>(0);
+  const [hasMoreResults, setHasMoreResults] = useState<boolean>(false);
+  const [totalResults, setTotalResults] = useState<number>(0);
+  const resultsPerPage = 20;
+  const [bibleVersion] = useState<string>('de4e12af7f28f599-02'); // Default version
   const [filters, setFilters] = useState<SearchFilter[]>([
     { id: '1', label: 'Old Testament', value: 'old_testament', selected: false },
     { id: '2', label: 'New Testament', value: 'new_testament', selected: false },
@@ -60,6 +68,10 @@ const BibleSearchScreen: React.FC = () => {
   ]);
 
   const searchInputRef = useRef<TextInput>(null);
+
+  // API hooks
+  const bibleSearch = useBibleSearch();
+  const { data: booksResponse } = useGetBooks(bibleVersion);
 
   const [recentSearches] = useState<RecentSearch[]>([
     { id: '1', query: 'love', timestamp: new Date() },
@@ -77,51 +89,126 @@ const BibleSearchScreen: React.FC = () => {
     { id: '6', query: 'wisdom', category: 'Knowledge', icon: 'bulb-outline' },
   ]);
 
-  // Mock search results
-  const mockSearchResults: SearchResult[] = [
-    {
-      id: '1',
-      book: 'John',
-      chapter: 3,
-      verse: 16,
-      text: 'For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life.',
-      reference: 'John 3:16'
-    },
-    {
-      id: '2',
-      book: '1 Corinthians',
-      chapter: 13,
-      verse: 4,
-      text: 'Love is patient, love is kind. It does not envy, it does not boast, it is not proud.',
-      reference: '1 Corinthians 13:4'
-    },
-    {
-      id: '3',
-      book: '1 John',
-      chapter: 4,
-      verse: 8,
-      text: 'Whoever does not love does not know God, because God is love.',
-      reference: '1 John 4:8'
-    },
-  ];
+  // Helper function to get book info from API response
+  const getBookInfo = (bookId: string) => {
+    if (!booksResponse?.data) return null;
+    return booksResponse.data.find(book => book.id === bookId);
+  };
 
-  const handleSearch = async (query: string) => {
+  // Helper function to parse verse reference and IDs from API response
+  const parseVerseData = (verse: any) => {
+    // From your API response, we can see:
+    // - id: "1CO.1.21" (book.chapter.verse)
+    // - orgId: "1CO.1.21" 
+    // - reference: "1 Corinthians 1:21"
+    // - chapterId: "1CO.1"
+    // - bookId: "1CO"
+    
+    const idParts = verse.id.split('.');
+    const bookId = verse.bookId || idParts[0];
+    const chapterId = verse.chapterId;
+    
+    // Extract chapter and verse numbers from the ID or reference
+    let chapter = 1;
+    let verseNumber = 1;
+    
+    if (idParts.length >= 3) {
+      chapter = parseInt(idParts[1]) || 1;
+      verseNumber = parseInt(idParts[2]) || 1;
+    } else {
+      // Fallback: parse from reference like "1 Corinthians 1:21"
+      const referenceMatch = verse.reference.match(/(\d+):(\d+)/);
+      if (referenceMatch) {
+        chapter = parseInt(referenceMatch[1]);
+        verseNumber = parseInt(referenceMatch[2]);
+      }
+    }
+    
+    return {
+      bookId,
+      chapterId,
+      chapter,
+      verse: verseNumber,
+    };
+  };
+
+  const handleSearch = async (query: string, page: number = 0) => {
     if (query.trim().length === 0) {
       setShowResults(false);
+      setSearchResults([]);
+      setCurrentPage(0);
+      setHasMoreResults(false);
+      setTotalResults(0);
       return;
     }
 
     setIsSearching(true);
-    setShowResults(true);
+    if (page === 0) {
+      setShowResults(true);
+      setSearchResults([]);
+    }
 
-    // Simulate API call
-    setTimeout(() => {
-      const filteredResults = mockSearchResults.filter(result =>
-        result.text.toLowerCase().includes(query.toLowerCase())
-      );
-      setSearchResults(filteredResults);
+    try {
+      const response = await bibleSearch.mutateAsync({
+        bibleId: bibleVersion,
+        query: query.trim(),
+        limit: resultsPerPage,
+        offset: page * resultsPerPage,
+      });
+
+      if (response.data?.verses) {
+        const formattedResults: SearchResult[] = response.data.verses.map((verse) => {
+          const bookInfo = getBookInfo(verse.bookId);
+          const { bookId, chapterId, chapter, verse: verseNumber } = parseVerseData(verse);
+          
+          // Clean the text content - API returns 'text' field, not 'content'
+          const cleanText = (verse.text || verse.content || '').replace(/<[^>]*>/g, '');
+          
+          return {
+            id: verse.id,
+            book: bookInfo?.name || verse.reference.split(' ')[0] || 'Unknown',
+            chapter,
+            verse: verseNumber,
+            text: cleanText,
+            reference: verse.reference,
+            bookId,
+            chapterId,
+            verseId: verse.id,
+          };
+        });
+
+        if (page === 0) {
+          setSearchResults(formattedResults);
+        } else {
+          setSearchResults(prev => [...prev, ...formattedResults]);
+        }
+
+        setCurrentPage(page);
+        setTotalResults(response.data.total || 0);
+        setHasMoreResults((page + 1) * resultsPerPage < (response.data.total || 0));
+      } else {
+        if (page === 0) {
+          setSearchResults([]);
+          setTotalResults(0);
+          setHasMoreResults(false);
+        }
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      if (page === 0) {
+        setSearchResults([]);
+        setTotalResults(0);
+        setHasMoreResults(false);
+      }
+    } finally {
       setIsSearching(false);
-    }, 1000);
+    }
+  };
+
+  const loadMoreResults = () => {
+    if (!isSearching && hasMoreResults) {
+      handleSearch(searchQuery, currentPage + 1);
+    }
   };
 
   const handleQuickSearch = (query: string) => {
@@ -141,27 +228,65 @@ const BibleSearchScreen: React.FC = () => {
     setSearchQuery('');
     setShowResults(false);
     setSearchResults([]);
+    setCurrentPage(0);
+    setHasMoreResults(false);
+    setTotalResults(0);
     searchInputRef.current?.blur();
+  };
+
+  // Handle navigation to reader
+  const navigateToReader = (result: SearchResult) => {
+    router.push({
+      pathname: '/read/bible-reader',
+      params: {
+        version: bibleVersion,
+        bookId: result.bookId,
+        bookName: result.book,
+        chapterId: result.chapterId,
+        chapterNumber: result.chapter.toString(),
+        verseId: result.verseId,
+        verseNumber: result.verse.toString(),
+      }
+    });
   };
 
   const SearchResultItem: React.FC<{ item: SearchResult }> = ({ item }) => (
     <TouchableOpacity
       style={styles.searchResultItem}
-      onPress={() => router.push(`/bible/${item.book.toLowerCase().replace(/\s+/g, '-')}/${item.chapter}?verse=${item.verse}`)}
+      onPress={() => navigateToReader(item)}
       activeOpacity={0.7}
     >
       <View style={styles.searchResultHeader}>
         <Text style={styles.searchResultReference}>{item.reference}</Text>
         <View style={styles.searchResultActions}>
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              // Add bookmark functionality here
+            }}
+          >
             <Ionicons name="bookmark-outline" size={16} color="#6B7280" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              // Add share functionality here
+            }}
+          >
             <Ionicons name="share-outline" size={16} color="#6B7280" />
           </TouchableOpacity>
         </View>
       </View>
-      <Text style={styles.searchResultText}>{item.text}</Text>
+      <Text style={styles.searchResultText} numberOfLines={3}>
+        {item.text}
+      </Text>
+      <View style={styles.searchResultFooter}>
+        <Text style={styles.searchResultBook}>
+          {item.book} {item.chapter}:{item.verse}
+        </Text>
+      </View>
     </TouchableOpacity>
   );
 
@@ -244,59 +369,15 @@ const BibleSearchScreen: React.FC = () => {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {showResults ? (
           <>
-            {/* Search Tabs */}
-            <View style={styles.tabContainer}>
-              <TouchableOpacity
-                style={[styles.tab, activeTab === 'all' && styles.activeTab]}
-                onPress={() => setActiveTab('all')}
-              >
-                <Text style={[styles.tabText, activeTab === 'all' && styles.activeTabText]}>
-                  All Results ({searchResults.length})
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.tab, activeTab === 'verses' && styles.activeTab]}
-                onPress={() => setActiveTab('verses')}
-              >
-                <Text style={[styles.tabText, activeTab === 'verses' && styles.activeTabText]}>
-                  Verses
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.tab, activeTab === 'books' && styles.activeTab]}
-                onPress={() => setActiveTab('books')}
-              >
-                <Text style={[styles.tabText, activeTab === 'books' && styles.activeTabText]}>
-                  Books
-                </Text>
-              </TouchableOpacity>
+            {/* Search Results Header */}
+            <View style={styles.resultsHeader}>
+              <Text style={styles.resultsCount}>
+                {totalResults > 0 ? `${totalResults} results found` : 'No results'}
+              </Text>
             </View>
 
-            {/* Filters */}
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              style={styles.filtersContainer}
-              contentContainerStyle={styles.filtersContent}
-            >
-              {filters.map((filter) => (
-                <TouchableOpacity
-                  key={filter.id}
-                  style={[styles.filterChip, filter.selected && styles.selectedFilterChip]}
-                  onPress={() => toggleFilter(filter.id)}
-                >
-                  <Text style={[
-                    styles.filterChipText,
-                    filter.selected && styles.selectedFilterChipText
-                  ]}>
-                    {filter.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
             {/* Search Results */}
-            {isSearching ? (
+            {isSearching && currentPage === 0 ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#3B82F6" />
                 <Text style={styles.loadingText}>Searching...</Text>
@@ -304,15 +385,34 @@ const BibleSearchScreen: React.FC = () => {
             ) : (
               <View style={styles.resultsContainer}>
                 {searchResults.length > 0 ? (
-                  searchResults.map((result) => (
-                    <SearchResultItem key={result.id} item={result} />
-                  ))
+                  <>
+                    {searchResults.map((result) => (
+                      <SearchResultItem key={result.id} item={result} />
+                    ))}
+                    
+                    {/* Load More Button */}
+                    {hasMoreResults && (
+                      <TouchableOpacity
+                        style={styles.loadMoreButton}
+                        onPress={loadMoreResults}
+                        disabled={isSearching}
+                      >
+                        {isSearching ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <Text style={styles.loadMoreText}>
+                            Load More Results
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  </>
                 ) : (
                   <View style={styles.noResultsContainer}>
                     <Ionicons name="search-outline" size={48} color="#9CA3AF" />
                     <Text style={styles.noResultsTitle}>No results found</Text>
                     <Text style={styles.noResultsSubtitle}>
-                      Try adjusting your search or filters
+                      Try different keywords or check your spelling
                     </Text>
                   </View>
                 )}
@@ -347,12 +447,10 @@ const BibleSearchScreen: React.FC = () => {
                 ))}
               </View>
             </View>
-
           </>
         )}
 
-        {/* Bottom spacing */}
-        <View style={{ height: 100 }} />
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -418,57 +516,31 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  tabContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    marginVertical: 16,
-    marginHorizontal: 16,
-    borderRadius: 12,
-    padding: 4,
-  },
-  tab: {
-    flex: 1,
+  resultsHeader: {
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  activeTab: {
-    backgroundColor: '#3B82F6',
-  },
-  tabText: {
-    fontSize: 14,
-    fontFamily: 'Nunito-SemiBold',
-    color: '#6B7280',
-  },
-  activeTabText: {
-    color: '#FFFFFF',
-  },
-  filtersContainer: {
-    marginBottom: 16,
-  },
-  filtersContent: {
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  filterChip: {
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
-  selectedFilterChip: {
-    backgroundColor: '#3B82F6',
-    borderColor: '#3B82F6',
-  },
-  filterChipText: {
+  resultsCount: {
     fontSize: 14,
-    fontFamily: 'Nunito-Regular',
+    fontFamily: 'Nunito-Medium',
     color: '#6B7280',
   },
-  selectedFilterChipText: {
+  loadMoreButton: {
+    backgroundColor: '#3B82F6',
+    marginHorizontal: 16,
+    marginVertical: 16,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  loadMoreText: {
+    fontSize: 16,
+    fontFamily: 'Nunito-SemiBold',
     color: '#FFFFFF',
   },
   loadingContainer: {
@@ -520,6 +592,17 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Regular',
     color: '#111827',
     lineHeight: 24,
+    marginBottom: 8,
+  },
+  searchResultFooter: {
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    paddingTop: 8,
+  },
+  searchResultBook: {
+    fontSize: 12,
+    fontFamily: 'Nunito-Medium',
+    color: '#6B7280',
   },
   noResultsContainer: {
     alignItems: 'center',
@@ -536,6 +619,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Nunito-Regular',
     color: '#6B7280',
     marginTop: 4,
+    textAlign: 'center',
   },
   section: {
     marginBottom: 24,
@@ -588,7 +672,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     padding: 16,
     borderRadius: 12,
-
   },
   popularSearchIcon: {
     width: 40,
@@ -613,7 +696,6 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 2,
   },
- 
 });
 
 export default BibleSearchScreen;
